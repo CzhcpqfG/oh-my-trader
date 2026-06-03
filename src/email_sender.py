@@ -23,40 +23,131 @@ from .config import Config
 
 
 def markdown_to_html(md: str) -> str:
-    """简易 Markdown -> HTML 转换 (够用即可)"""
+    """
+    Markdown -> HTML 转换 (东方神秘学 × 编辑式排版)
+
+    设计方向:
+    - 墨黑底 + 米白字 + 烫金强调色
+    - 思源宋体 + 衬线大字
+    - 印章式卦象 + 烫金细线分隔
+    - 编辑式分栏、留白、节奏
+    """
     import re
 
-    html = md
+    # ====== 抽取特殊块 ======
+    # 提取 H1 标题
+    h1_match = re.search(r'^# (.+)$', md, re.MULTILINE)
+    h1_text = h1_match.group(1).strip() if h1_match else "今日市场风水研报"
 
-    # 标题
-    html = re.sub(r'^# (.+)$', r'<h1 style="color:#2c3e50;border-bottom:2px solid #34495e;padding-bottom:8px;">\1</h1>', html, flags=re.MULTILINE)
-    html = re.sub(r'^## (.+)$', r'<h2 style="color:#34495e;border-left:4px solid #3498db;padding-left:10px;margin-top:30px;">\1</h2>', html, flags=re.MULTILINE)
-    html = re.sub(r'^### (.+)$', r'<h3 style="color:#16a085;">\1</h3>', html, flags=re.MULTILINE)
+    # 提取首行 metadata (日期/生成时间)
+    date_match = re.search(r'\*\*日期\*\*:?\s*(.+)', md)
+    date_line = date_match.group(1).strip() if date_match else ""
 
-    # 粗体
-    html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
+    # 清理 H1 和首段 meta
+    body = re.sub(r'^# .+\n', '', md, count=1, flags=re.MULTILINE)
+    body = re.sub(r'^\*\*日期\*\*:?.+\n', '', body, count=1, flags=re.MULTILINE)
+    body = re.sub(r'^\*\*生成时间\*\*:?.+\n', '', body, count=1, flags=re.MULTILINE)
 
-    # 引用
-    html = re.sub(r'^> (.+)$', r'<blockquote style="border-left:3px solid #95a5a6;color:#7f8c8d;padding-left:10px;margin:10px 0;">\1</blockquote>', html, flags=re.MULTILINE)
+    # ====== 块转换 ======
+    # H2 - 章节标题 (烫金细线 + 序号)
+    h2_idx = 0
+    def _h2_replace(m):
+        nonlocal h2_idx
+        h2_idx += 1
+        title = m.group(1).strip()
+        return (
+            f'<div class="chapter" style="margin:48px 0 24px;">'
+            f'<div class="chapter-num" style="font-family:\'Cormorant Garamond\',\'Times New Roman\',serif;font-size:11px;letter-spacing:0.4em;color:#c8a96a;text-transform:uppercase;margin-bottom:8px;">CHAPTER · {h2_idx:02d}</div>'
+            f'<h2 style="font-family:\'Noto Serif SC\',\'Source Han Serif SC\',serif;font-size:26px;font-weight:600;color:#f4ede0;margin:0;letter-spacing:0.05em;line-height:1.3;">{title}</h2>'
+            f'<div style="width:48px;height:1px;background:linear-gradient(90deg,#c8a96a 0%,transparent 100%);margin-top:14px;"></div>'
+            f'</div>'
+        )
+    body = re.sub(r'^## (.+)$', _h2_replace, body, flags=re.MULTILINE)
 
-    # 列表
-    html = re.sub(r'^- (.+)$', r'<li>\1</li>', html, flags=re.MULTILINE)
-    html = re.sub(r'(<li>.*</li>\n?)+', lambda m: '<ul style="margin:10px 0;padding-left:25px;">' + m.group(0) + '</ul>', html)
+    # H3 - 子节 (左侧金色竖线)
+    def _h3_replace(m):
+        title = m.group(1).strip()
+        return f'<h3 style="font-family:\'Noto Serif SC\',serif;font-size:17px;font-weight:500;color:#c8a96a;margin:28px 0 14px;padding-left:14px;border-left:2px solid #c8a96a;letter-spacing:0.05em;">{title}</h3>'
+    body = re.sub(r'^### (.+)$', _h3_replace, body, flags=re.MULTILINE)
 
-    # 数字列表
-    html = re.sub(r'^\d+\. (.+)$', r'<li>\1</li>', html, flags=re.MULTILINE)
+    # 粗体 -> 金色
+    body = re.sub(r'\*\*(.+?)\*\*', r'<strong style="color:#e8c87a;font-weight:600;">\1</strong>', body)
+
+    # 引用块 (古书引文样式)
+    def _quote_replace(m):
+        text = m.group(1).strip()
+        return (
+            f'<blockquote style="margin:18px 0;padding:18px 24px;background:rgba(200,169,106,0.06);'
+            f'border-left:2px solid #c8a96a;font-family:\'Noto Serif SC\',serif;font-style:italic;'
+            f'color:#d4c4a0;font-size:15px;line-height:1.8;letter-spacing:0.05em;">'
+            f'<span style="color:#c8a96a;font-size:18px;margin-right:8px;">"</span>{text}'
+            f'<span style="color:#c8a96a;font-size:18px;margin-left:4px;">"</span>'
+            f'</blockquote>'
+        )
+    body = re.sub(r'^> (.+)$', _quote_replace, body, flags=re.MULTILINE)
 
     # 分隔线
-    html = re.sub(r'^---$', r'<hr style="border:none;border-top:1px solid #bdc3c7;margin:20px 0;">', html, flags=re.MULTILINE)
+    body = re.sub(
+        r'^---$',
+        '<div style="text-align:center;margin:36px 0;color:#c8a96a;font-size:14px;letter-spacing:1em;">❋ · ❋ · ❋</div>',
+        body, flags=re.MULTILINE,
+    )
+
+    # 列表项 (无序) - 用中式圆点
+    def _li_replace(m):
+        text = m.group(1).strip()
+        return f'<li style="margin:8px 0;line-height:1.8;color:#e8dfd0;padding-left:4px;"><span style="color:#c8a96a;margin-right:10px;">·</span>{text}</li>'
+    body = re.sub(r'^- (.+)$', _li_replace, body, flags=re.MULTILINE)
+
+    # 包裹连续 li 为 ul
+    body = re.sub(
+        r'((?:<li[^>]*>.*?</li>\n?)+)',
+        r'<ul style="list-style:none;padding:0;margin:14px 0;">\1</ul>',
+        body,
+    )
+
+    # 数字列表
+    def _ol_replace(m):
+        text = m.group(1).strip()
+        return f'<li style="margin:8px 0;line-height:1.8;color:#e8dfd0;">{text}</li>'
+    body = re.sub(r'^\d+\. (.+)$', _ol_replace, body, flags=re.MULTILINE)
+    body = re.sub(
+        r'((?:<li style="margin:8px 0;line-height:1.8;color:#e8dfd0;">.*?</li>\n?)+)',
+        r'<ol style="list-style:none;padding:0;margin:14px 0;counter-reset:item;">\1</ol>',
+        body,
+    )
 
     # 段落
-    lines = html.split('\n')
+    lines = body.split('\n')
     new_lines = []
     in_para = False
     for line in lines:
-        if line.strip() and not line.strip().startswith('<') and not line.strip().startswith('---'):
+        stripped = line.strip()
+        if not stripped:
+            if in_para:
+                new_lines.append('</p>')
+                in_para = False
+            continue
+        is_block = (
+            stripped.startswith('<div') or
+            stripped.startswith('<h') or
+            stripped.startswith('<ul') or
+            stripped.startswith('<ol') or
+            stripped.startswith('<li') or
+            stripped.startswith('<blockquote') or
+            stripped.startswith('<hr') or
+            stripped.endswith('</li>') or
+            stripped.endswith('</ul>') or
+            stripped.endswith('</ol>') or
+            stripped.endswith('</h2>') or
+            stripped.endswith('</h3>')
+        )
+        if not is_block:
             if not in_para:
-                new_lines.append('<p style="line-height:1.7;margin:10px 0;">')
+                new_lines.append(
+                    '<p style="font-family:\'Noto Serif SC\',serif;font-size:15px;line-height:1.9;'
+                    'color:#d4c8b0;margin:14px 0;letter-spacing:0.03em;">'
+                )
                 in_para = True
             new_lines.append(line)
         else:
@@ -66,25 +157,66 @@ def markdown_to_html(md: str) -> str:
             new_lines.append(line)
     if in_para:
         new_lines.append('</p>')
+    body = '\n'.join(new_lines)
 
-    html = '\n'.join(new_lines)
+    # ====== 顶部 hero ======
+    hero_html = f'''
+    <div class="hero" style="padding:60px 40px 50px;text-align:center;border-bottom:1px solid rgba(200,169,106,0.2);position:relative;">
+      <div style="font-family:'Cormorant Garamond','Times New Roman',serif;font-size:11px;letter-spacing:0.5em;color:#c8a96a;text-transform:uppercase;margin-bottom:24px;">Daily Almanac Report</div>
+      <div style="font-family:'Noto Serif SC','Source Han Serif SC',serif;font-size:42px;font-weight:700;color:#f4ede0;letter-spacing:0.08em;line-height:1.2;margin-bottom:18px;">{h1_text}</div>
+      <div style="width:60px;height:1px;background:#c8a96a;margin:0 auto 20px;"></div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:14px;color:#a89878;letter-spacing:0.2em;font-style:italic;">{date_line}</div>
+      <div style="position:absolute;top:30px;left:30px;font-family:'Noto Serif SC',serif;font-size:60px;color:rgba(200,169,106,0.08);line-height:1;">⿰</div>
+      <div style="position:absolute;bottom:30px;right:30px;font-family:'Noto Serif SC',serif;font-size:60px;color:rgba(200,169,106,0.08);line-height:1;">⿱</div>
+    </div>
+    '''
 
-    return f"""<!DOCTYPE html>
-<html>
+    # ====== 底部页脚 (极简, 无免责声明) ======
+    footer_html = '''
+    <div style="margin-top:60px;padding-top:30px;border-top:1px solid rgba(200,169,106,0.15);text-align:center;">
+      <div style="font-family:'Noto Serif SC',serif;font-size:18px;color:#c8a96a;letter-spacing:0.5em;margin-bottom:12px;">☷ ☵ ☲ ☳ ☴ ☵ ☶ ☷</div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:11px;color:#6b5d4a;letter-spacing:0.3em;text-transform:uppercase;">oh-my-trader</div>
+    </div>
+    '''
+
+    return f'''<!DOCTYPE html>
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>今日市场风水研报</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body style="font-family:'Microsoft YaHei',Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#2c3e50;background:#fafafa;">
-<div style="background:white;padding:30px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
-{html}
-<div style="margin-top:30px;padding-top:20px;border-top:1px solid #ecf0f1;text-align:center;color:#95a5a6;font-size:12px;">
-  oh-my-trader · 每日市场风水研报 · {datetime.now().strftime("%Y-%m-%d %H:%M")}
-</div>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Noto Serif SC','Source Han Serif SC',serif;-webkit-font-smoothing:antialiased;">
+<div style="max-width:680px;margin:0 auto;background:linear-gradient(180deg,#0d0d0d 0%,#0a0a0a 100%);min-height:100vh;">
+
+  <!-- 背景纹理 -->
+  <div style="position:relative;">
+    <div style="position:absolute;top:0;left:0;right:0;bottom:0;background-image:radial-gradient(circle at 20% 10%,rgba(200,169,106,0.04) 0%,transparent 40%),radial-gradient(circle at 80% 80%,rgba(200,169,106,0.03) 0%,transparent 40%);pointer-events:none;"></div>
+
+    <!-- 顶部 -->
+    <div style="padding:18px 30px;border-bottom:1px solid rgba(200,169,106,0.1);display:flex;justify-content:space-between;align-items:center;font-family:'Cormorant Garamond',serif;font-size:10px;letter-spacing:0.3em;color:#6b5d4a;text-transform:uppercase;">
+      <span>DAILY · 8:30</span>
+      <span style="color:#c8a96a;">❋</span>
+      <span>EST. 二〇二六</span>
+    </div>
+
+    <!-- Hero -->
+    {hero_html}
+
+    <!-- 主体 -->
+    <div style="padding:20px 40px 50px;">
+      {body}
+    </div>
+
+    <!-- 页脚 -->
+    {footer_html}
+  </div>
 </div>
 </body>
-</html>"""
+</html>'''
 
 
 def send_email(
