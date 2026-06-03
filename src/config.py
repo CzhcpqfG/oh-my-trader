@@ -22,6 +22,7 @@ class Config:
     deepseek_api_key: str
     deepseek_base_url: str
     deepseek_model: str
+    llm_temperature: float
 
     # 邮件
     email_host: str
@@ -31,10 +32,6 @@ class Config:
     email_to: str
     email_subject_prefix: str
 
-    # 报告
-    timezone: str
-    target_time: str
-
     @classmethod
     def from_env(cls) -> "Config":
         def _get(key: str, default: str = "") -> str:
@@ -43,7 +40,6 @@ class Config:
             return val if val else default
 
         def _get_int(key: str, default: int) -> int:
-            """获取整数环境变量, 兼容空字符串"""
             val = os.environ.get(key, "")
             if not val:
                 return default
@@ -52,22 +48,29 @@ class Config:
             except ValueError:
                 return default
 
+        def _get_float(key: str, default: float) -> float:
+            val = os.environ.get(key, "")
+            if not val:
+                return default
+            try:
+                return float(val)
+            except ValueError:
+                return default
+
         return cls(
             deepseek_api_key=_get("DEEPSEEK_API_KEY", ""),
             deepseek_base_url=_get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
             deepseek_model=_get("DEEPSEEK_MODEL", "deepseek-chat"),
+            llm_temperature=_get_float("LLM_TEMPERATURE", 0.8),
             email_host=_get("EMAIL_HOST", "smtp.qq.com"),
             email_port=_get_int("EMAIL_PORT", 465),
             email_user=_get("EMAIL_USER", ""),
             email_pass=_get("EMAIL_PASS", ""),
             email_to=_get("EMAIL_TO", ""),
             email_subject_prefix=_get("EMAIL_SUBJECT_PREFIX", "[今日风水报告]"),
-            timezone=_get("TIMEZONE", "Asia/Shanghai"),
-            target_time=_get("TARGET_TIME", "08:30"),
         )
 
     def validate(self) -> list[str]:
-        """校验必填字段, 返回缺失项列表"""
         missing = []
         if not self.deepseek_api_key:
             missing.append("DEEPSEEK_API_KEY")

@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 import json
+import time
 import requests
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -102,10 +103,13 @@ def build_user_prompt(
 """
 
     # 卦象
+    from data.ganzhi_data import BAGUA
+    upper_desc = BAGUA.get(iching.upper_trigram, {}).get("特性", "")
+    lower_desc = BAGUA.get(iching.lower_trigram, {}).get("特性", "")
     iching_section = f"""【周易卦象】
 - 起卦法: {iching.method}
-- 上卦: {iching.upper_trigram} ({TRIGRAM_DESCRIPTIONS.get(iching.upper_trigram, '')})
-- 下卦: {iching.lower_trigram} ({TRIGRAM_DESCRIPTIONS.get(iching.lower_trigram, '')})
+- 上卦: {iching.upper_trigram} ({upper_desc})
+- 下卦: {iching.lower_trigram} ({lower_desc})
 - 卦名: {iching.hexagram_name}
 - 卦辞: {iching.hexagram_text}
 - 象传: {iching.hexagram_image}
@@ -135,13 +139,7 @@ def build_user_prompt(
     return calendar_section + "\n" + almanac_section + "\n" + iching_section + "\n" + market_section + "\n" + additional
 
 
-# 用于 Prompt 中描述八卦自然属性
-TRIGRAM_DESCRIPTIONS = {
-    "乾": "天-刚健", "兑": "泽-悦",
-    "离": "火-光明", "震": "雷-动",
-    "巽": "风-入", "坎": "水-险",
-    "艮": "山-止", "坤": "地-顺",
-}
+# TRIGRAM_DESCRIPTIONS 已移至 data.ganzhi_data.BAGUA, 这里不再重复定义
 
 
 def call_deepseek(
@@ -151,8 +149,14 @@ def call_deepseek(
     system_prompt: str,
     user_prompt: str,
     timeout: int = 120,
+    max_retries: int = 3,
+    temperature: float = 0.8,
 ) -> str:
-    """调用 DeepSeek API"""
+    """调用 DeepSeek API, 带指数退避重试
+
+    重试触发: ConnectionError / Timeout / 429
+    不重试: 4xx 客户端错误 (400/401/403) — 这些重试也没用
+    """
     url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -164,15 +168,46 @@ def call_deepseek(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        "temperature": 0.8,
+        "temperature": temperature,
         "max_tokens": 4096,
         "stream": False,
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=timeout)
-    response.raise_for_status()
-    data = response.json()
-    return data["choices"][0]["message"]["content"]
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+
+            # 429 限流: 等待后重试
+            if response.status_code == 429:
+                wait = 2 ** attempt
+                if attempt < max_retries:
+                    print(f"  [warn] 限流 (429), 等待 {wait}s 后重试 ({attempt}/{max_retries})")
+                    time.sleep(wait)
+                    continue
+
+            # 4xx 客户端错误 (非 429): 不重试
+            if 400 <= response.status_code < 500:
+                response.raise_for_status()  # 抛 HTTPError
+
+            response.raise_for_status()
+            data = response.json()
+            return data["choices"][0]["message"]["content"]
+
+        except (requests.ConnectionError, requests.Timeout) as e:
+            last_exc = e
+            if attempt < max_retries:
+                wait = 2 ** attempt
+                print(f"  [warn] 网络错误, {wait}s 后重试 ({attempt}/{max_retries}): {e}")
+                time.sleep(wait)
+            continue
+        except requests.HTTPError:
+            # 4xx 错误: 直接抛
+            raise
+
+    raise RuntimeError(
+        f"DeepSeek API 调用失败 (已重试 {max_retries} 次): {last_exc}"
+    )
 
 
 def generate_report(
@@ -185,13 +220,14 @@ def generate_report(
     """生成完整报告 (含头部, 不含免责声明)"""
     user_prompt = build_user_prompt(cal, almanac, iching, market)
 
-    print(f"正在调用 DeepSeek API ({config.deepseek_model}) 生成报告...")
+    print(f"正在调用 DeepSeek API ({config.deepseek_model}, t={config.llm_temperature}) 生成报告...")
     body = call_deepseek(
         api_key=config.deepseek_api_key,
         base_url=config.deepseek_base_url,
         model=config.deepseek_model,
         system_prompt=SYSTEM_PROMPT,
         user_prompt=user_prompt,
+        temperature=config.llm_temperature,
     )
 
     # 组装完整报告 (无免责声明)
