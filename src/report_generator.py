@@ -195,7 +195,7 @@ def generate_report(
     )
 
     # 组装完整报告 (无免责声明)
-    header = f"""# 今日市场风水研报
+    header = f"""# 市场风水研报
 
 **日期**: {cal.solar_date} {cal.weekday} ({cal.lunar_year_cn} {cal.lunar_month_cn}{cal.lunar_day_cn})
 **生成时间**: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
