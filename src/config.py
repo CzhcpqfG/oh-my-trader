@@ -37,18 +37,33 @@ class Config:
 
     @classmethod
     def from_env(cls) -> "Config":
+        def _get(key: str, default: str = "") -> str:
+            """获取环境变量, 空字符串当作未设置"""
+            val = os.environ.get(key, default)
+            return val if val else default
+
+        def _get_int(key: str, default: int) -> int:
+            """获取整数环境变量, 兼容空字符串"""
+            val = os.environ.get(key, "")
+            if not val:
+                return default
+            try:
+                return int(val)
+            except ValueError:
+                return default
+
         return cls(
-            deepseek_api_key=os.environ.get("DEEPSEEK_API_KEY", ""),
-            deepseek_base_url=os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
-            deepseek_model=os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
-            email_host=os.environ.get("EMAIL_HOST", "smtp.qq.com"),
-            email_port=int(os.environ.get("EMAIL_PORT", "465")),
-            email_user=os.environ.get("EMAIL_USER", ""),
-            email_pass=os.environ.get("EMAIL_PASS", ""),
-            email_to=os.environ.get("EMAIL_TO", ""),
-            email_subject_prefix=os.environ.get("EMAIL_SUBJECT_PREFIX", "[今日风水报告]"),
-            timezone=os.environ.get("TIMEZONE", "Asia/Shanghai"),
-            target_time=os.environ.get("TARGET_TIME", "08:30"),
+            deepseek_api_key=_get("DEEPSEEK_API_KEY", ""),
+            deepseek_base_url=_get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+            deepseek_model=_get("DEEPSEEK_MODEL", "deepseek-chat"),
+            email_host=_get("EMAIL_HOST", "smtp.qq.com"),
+            email_port=_get_int("EMAIL_PORT", 465),
+            email_user=_get("EMAIL_USER", ""),
+            email_pass=_get("EMAIL_PASS", ""),
+            email_to=_get("EMAIL_TO", ""),
+            email_subject_prefix=_get("EMAIL_SUBJECT_PREFIX", "[今日风水报告]"),
+            timezone=_get("TIMEZONE", "Asia/Shanghai"),
+            target_time=_get("TARGET_TIME", "08:30"),
         )
 
     def validate(self) -> list[str]:
