@@ -1,0 +1,75 @@
+name: Daily Market Report
+
+on:
+  # 北京时间每天 08:30 = UTC 00:30
+  schedule:
+    - cron: '30 0 * * *'
+  # 支持手动触发 (Actions 页面 -> Run workflow)
+  workflow_dispatch:
+  # 支持 API 触发
+  repository_dispatch:
+
+# 防止并发执行
+concurrency:
+  group: daily-report
+  cancel-in-progress: false
+
+jobs:
+  generate-and-send:
+    name: Generate and Send Daily Report
+    runs-on: ubuntu-latest
+
+    # 设置容器时区为北京时间 (虽然 cron 是 UTC, 但脚本内部用 Asia/Shanghai)
+    env:
+      TZ: Asia/Shanghai
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify calendar module
+        run: |
+          python -c "
+          import sys
+          sys.stdout.reconfigure(encoding='utf-8')
+          from src.calendar_utils import calc_calendar
+          info = calc_calendar()
+          print(f'Date: {info.solar_date}')
+          print(f'GZ: {info.year_ganzhi}/{info.month_ganzhi}/{info.day_ganzhi}')
+          print(f'Nayin: {info.nayin}')
+          "
+
+      - name: Run daily report
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+          DEEPSEEK_MODEL: ${{ secrets.DEEPSEEK_MODEL }}
+          EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+          EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_SUBJECT_PREFIX: ${{ secrets.EMAIL_SUBJECT_PREFIX }}
+          TIMEZONE: Asia/Shanghai
+        run: |
+          python -m src.main
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-report
+          path: output/
+          retention-days: 30
