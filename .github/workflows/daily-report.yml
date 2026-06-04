@@ -1,9 +1,9 @@
 name: Daily Market Report
 
 on:
-  # 北京时间每天 08:30 = UTC 00:30
+  # 北京时间每天 08:00 = UTC 00:00 (提前 30 分钟进队列, 抵消 GitHub Actions 调度延迟)
   schedule:
-    - cron: '30 0 * * *'
+    - cron: '0 0 * * *'
   # 支持手动触发 (Actions 页面 -> Run workflow)
   workflow_dispatch:
   # 支持 API 触发
