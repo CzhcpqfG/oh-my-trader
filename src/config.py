@@ -29,7 +29,7 @@ class Config:
     email_port: int
     email_user: str
     email_pass: str
-    email_to: str
+    email_to: list[str]
     email_subject_prefix: str
 
     @classmethod
@@ -57,6 +57,13 @@ class Config:
             except ValueError:
                 return default
 
+        def _get_list(key: str) -> list[str]:
+            """解析逗号/分号分隔的字符串, 去空白和空项"""
+            val = os.environ.get(key, "")
+            if not val:
+                return []
+            return [s.strip() for s in val.replace(";", ",").split(",") if s.strip()]
+
         return cls(
             deepseek_api_key=_get("DEEPSEEK_API_KEY", ""),
             deepseek_base_url=_get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
@@ -66,7 +73,7 @@ class Config:
             email_port=_get_int("EMAIL_PORT", 465),
             email_user=_get("EMAIL_USER", ""),
             email_pass=_get("EMAIL_PASS", ""),
-            email_to=_get("EMAIL_TO", ""),
+            email_to=_get_list("EMAIL_TO"),
             email_subject_prefix=_get("EMAIL_SUBJECT_PREFIX", "[今日风水报告]"),
         )
 

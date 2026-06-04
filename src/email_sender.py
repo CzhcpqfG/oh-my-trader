@@ -232,7 +232,7 @@ def send_email(
         subject: 邮件主题
         content_md: 报告内容 (Markdown)
         config: 配置
-        to_addr: 收件人, 默认使用 config.email_to
+        to_addrs: 收件人列表, 默认使用 config.email_to
 
     Returns:
         发送是否成功
@@ -241,15 +241,15 @@ def send_email(
         print("❌ 邮件配置缺失 (EMAIL_USER / EMAIL_PASS)")
         return False
 
-    to_addr = to_addr or config.email_to
-    if not to_addr:
+    to_addrs = to_addrs or config.email_to
+    if not to_addrs:
         print("❌ 未指定收件人")
         return False
 
     # 构造邮件
     msg = MIMEMultipart("alternative")
     msg["From"] = formataddr(["oh-my-trader", config.email_user])
-    msg["To"] = formataddr(["User", to_addr])
+    msg["To"] = ", ".join(to_addrs)
     msg["Subject"] = Header(subject, "utf-8").encode()
 
     # 纯文本 + HTML 双版本
@@ -266,15 +266,15 @@ def send_email(
             context = ssl.create_default_context()
             with smtplib.SMTP_SSL(config.email_host, config.email_port, context=context, timeout=30) as server:
                 server.login(config.email_user, config.email_pass)
-                server.sendmail(config.email_user, [to_addr], msg.as_string())
+                server.sendmail(config.email_user, to_addrs, msg.as_string())
         else:
             # STARTTLS (587)
             with smtplib.SMTP(config.email_host, config.email_port, timeout=30) as server:
                 server.starttls()
                 server.login(config.email_user, config.email_pass)
-                server.sendmail(config.email_user, [to_addr], msg.as_string())
+                server.sendmail(config.email_user, to_addrs, msg.as_string())
 
-        print(f"✅ 邮件发送成功 -> {to_addr}")
+        print(f"✅ 邮件发送成功 -> {', '.join(to_addrs)}")
         return True
     except smtplib.SMTPAuthenticationError as e:
         print(f"❌ 邮件认证失败: {e}")
