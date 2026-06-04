@@ -91,9 +91,12 @@ def run(
 
     # 5. 市场背景
     print("\n[4/5] Loading market context...")
-    market = load_context(custom_market_path)
+    market = load_context(custom_market_path, enabled_markets=config.enabled_markets)
     print(f"   Date: {market.date}")
-    print(f"   A-share: {market.a_share[:50]}...")
+    print(f"   Markets: {list(market.sections.keys())}")
+    for k, v in market.sections.items():
+        preview = v[:60].replace('\n', ' ')
+        print(f"     [{k}] {preview}...")
 
     # 6. 生成报告
     print("\n[5/5] Calling LLM to generate report...")

@@ -28,35 +28,7 @@ if TYPE_CHECKING:
     pass
 
 
-SYSTEM_PROMPT = """你是一位资深的中国传统文化研究者, 同时精通现代金融市场分析。
-
-你的任务是基于下方提供的"今日确定性历法数据"和"市场背景", 撰写一份今日市场风水研报。
-
-【重要原则】
-1. 所有历法/干支/宜忌/卦象数据已由系统计算好, 你必须**严格使用**提供的数据, 不得自行推算、补充或修改。
-2. 不要对日期、农历、星期、干支等做任何"纠正", 即便你觉得与某来源不同。
-3. 推演部分要基于"五行生克"、"卦象精神"、"建除十二星寓意"等传统术数逻辑。
-4. 报告用语要稳重、有文化底蕴, 可以有观点、有判断, 但避免过度神化或绝对化。
-5. 报告末尾**不要**添加免责声明、风险提示、"仅供娱乐参考"等说教性文字。
-
-【报告结构】
-请按以下结构组织 Markdown 报告:
-1. 历法档案 (日期、农历、干支、纳音、生肖、节气)
-2. 黄历研判 (建除十二星、黄道/黑道、五行宜忌、市场板块映射)
-3. 卦象解读 (上卦下卦、卦辞、象传、动爻、市场寓意)
-4. 今日综合研判 (整体市场氛围一句话定性)
-5. A股市场分析
-6. 美股市场分析
-7. 宏观环境分析
-8. 加密货币市场分析
-9. 操作建议 (吉时、规避事项)
-10. 综合评分 (满分100, 给个倾向分)
-
-【语言风格】
-- 使用简体中文
-- 引用传统经典时保持原文, 但解释用现代汉语
-- 不用"玄学/迷信"等自贬词汇, 但需明确非投资建议
-"""
+# SYSTEM_PROMPT 已移至 build_system_prompt(enabled_markets) 函数, 根据启用市场动态生成
 
 
 def build_user_prompt(
@@ -118,13 +90,14 @@ def build_user_prompt(
 - 市场倾向: {iching.market_tendency}
 """
 
-    # 市场背景
+    # 市场背景 (遍历 sections, 与 enabled_markets 一致)
+    market_lines = "\n".join(
+        f"- {MARKET_SECTION_NAMES.get(k, k)}: {v}"
+        for k, v in market.sections.items()
+    )
     market_section = f"""【市场背景】
 - 日期: {market.date}
-- A股: {market.a_share}
-- 美股: {market.us_stock}
-- 宏观: {market.macro}
-- 加密: {market.crypto}
+{market_lines}
 """
 
     # 时辰吉凶 (12时辰)
@@ -142,7 +115,98 @@ def build_user_prompt(
 # TRIGRAM_DESCRIPTIONS 已移至 data.ganzhi_data.BAGUA, 这里不再重复定义
 
 
-def call_deepseek(
+# 市场 key → 报告章节目录
+MARKET_SECTION_NAMES = {
+    "a_share": "A股市场分析",
+    "us_stock": "美股市场分析",
+    "macro": "宏观环境分析",
+    "crypto": "加密货币市场分析",
+    "futures": "期货市场分析",
+    "forex": "外汇市场分析",
+}
+
+
+def build_system_prompt(enabled_markets: list[str]) -> str:
+    """根据启用的市场生成 SYSTEM_PROMPT"""
+    market_lines = "\n".join(
+        f"{i+5}. {MARKET_SECTION_NAMES.get(m, m)}"
+        for i, m in enumerate(enabled_markets)
+    ) or "5. (无特定市场, 仅综合研判)"
+
+    return f"""你是一位资深的中国传统文化研究者, 同时精通现代金融市场分析。
+
+你的任务是基于下方提供的"今日确定性历法数据"和"市场背景", 撰写一份今日市场风水研报。
+
+【重要原则】
+1. 所有历法/干支/宜忌/卦象数据已由系统计算好, 你必须**严格使用**提供的数据, 不得自行推算、补充或修改。
+2. 不要对日期、农历、星期、干支等做任何"纠正", 即便你觉得与某来源不同。
+3. 推演部分要基于"五行生克"、"卦象精神"、"建除十二星寓意"等传统术数逻辑。
+4. 报告用语要稳重、有文化底蕴, 可以有观点、有判断, 但避免过度神化或绝对化。
+5. 报告末尾**不要**添加免责声明、风险提示、"仅供娱乐参考"等说教性文字。
+
+【报告结构】
+请按以下结构组织 Markdown 报告:
+1. 历法档案 (日期、农历、干支、纳音、生肖、节气)
+2. 黄历研判 (建除十二星、黄道/黑道、五行宜忌、市场板块映射)
+3. 卦象解读 (上卦下卦、卦辞、象传、动爻、市场寓意)
+4. 今日综合研判 (整体市场氛围一句话定性)
+{market_lines}
+{len(enabled_markets) + 5}. 操作建议 (吉时、规避事项)
+{len(enabled_markets) + 6}. 综合评分 (满分100, 给个倾向分)
+
+【语言风格】
+- 使用简体中文
+- 引用传统经典时保持原文, 但解释用现代汉语
+- 不用"玄学/迷信"等自贬词汇, 但需明确非投资建议
+"""
+
+
+def call_llm(
+    provider: str,
+    system_prompt: str,
+    user_prompt: str,
+    api_key: str = "",
+    base_url: str = "",
+    model: str = "",
+    claude_api_key: str = "",
+    claude_model: str = "claude-sonnet-4-20250514",
+    timeout: int = 120,
+    max_retries: int = 3,
+    temperature: float = 0.8,
+) -> str:
+    """调用 LLM API, 带指数退避重试
+
+    provider:
+      - claude: 用 Anthropic SDK
+      - 其他 (deepseek/openai/tongyi/zhipu/custom): OpenAI 兼容 /chat/completions
+
+    重试触发: ConnectionError / Timeout / 429
+    不重试: 4xx 客户端错误 (400/401/403) — 这些重试也没用
+    """
+    if provider == "claude":
+        return _call_claude(
+            api_key=claude_api_key,
+            model=claude_model,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            timeout=timeout,
+            max_retries=max_retries,
+            temperature=temperature,
+        )
+    # OpenAI 兼容
+    return _call_openai_compat(
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        timeout=timeout,
+        max_retries=max_retries,
+        temperature=temperature,
+    )
+
+
+def _call_openai_compat(
     api_key: str,
     base_url: str,
     model: str,
@@ -152,11 +216,6 @@ def call_deepseek(
     max_retries: int = 3,
     temperature: float = 0.8,
 ) -> str:
-    """调用 DeepSeek API, 带指数退避重试
-
-    重试触发: ConnectionError / Timeout / 429
-    不重试: 4xx 客户端错误 (400/401/403) — 这些重试也没用
-    """
     url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -177,23 +236,17 @@ def call_deepseek(
     for attempt in range(1, max_retries + 1):
         try:
             response = requests.post(url, headers=headers, json=payload, timeout=timeout)
-
-            # 429 限流: 等待后重试
             if response.status_code == 429:
                 wait = 2 ** attempt
                 if attempt < max_retries:
                     print(f"  [warn] 限流 (429), 等待 {wait}s 后重试 ({attempt}/{max_retries})")
                     time.sleep(wait)
                     continue
-
-            # 4xx 客户端错误 (非 429): 不重试
             if 400 <= response.status_code < 500:
-                response.raise_for_status()  # 抛 HTTPError
-
+                response.raise_for_status()
             response.raise_for_status()
             data = response.json()
             return data["choices"][0]["message"]["content"]
-
         except (requests.ConnectionError, requests.Timeout) as e:
             last_exc = e
             if attempt < max_retries:
@@ -202,11 +255,56 @@ def call_deepseek(
                 time.sleep(wait)
             continue
         except requests.HTTPError:
-            # 4xx 错误: 直接抛
             raise
 
     raise RuntimeError(
-        f"DeepSeek API 调用失败 (已重试 {max_retries} 次): {last_exc}"
+        f"LLM API 调用失败 (已重试 {max_retries} 次): {last_exc}"
+    )
+
+
+def _call_claude(
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    timeout: int = 120,
+    max_retries: int = 3,
+    temperature: float = 0.8,
+) -> str:
+    try:
+        import anthropic
+    except ImportError:
+        raise RuntimeError(
+            "使用 Claude 需要安装 anthropic: pip install anthropic"
+        )
+
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            client = anthropic.Anthropic(api_key=api_key, timeout=timeout)
+            msg = client.messages.create(
+                model=model,
+                max_tokens=4096,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+                temperature=temperature,
+            )
+            return msg.content[0].text
+        except Exception as e:
+            last_exc = e
+            # anthropic 库的异常结构: RateLimitError / APIConnectionError / APIStatusError
+            err_name = type(e).__name__
+            if "RateLimit" in err_name or "Connection" in err_name or "Timeout" in err_name:
+                if attempt < max_retries:
+                    wait = 2 ** attempt
+                    print(f"  [warn] Claude {err_name}, {wait}s 后重试 ({attempt}/{max_retries})")
+                    time.sleep(wait)
+                    continue
+            # 其他 (认证/参数错): 不重试
+            raise
+
+    raise RuntimeError(
+        f"Claude API 调用失败 (已重试 {max_retries} 次): {last_exc}"
     )
 
 
@@ -220,12 +318,19 @@ def generate_report(
     """生成完整报告 (含头部, 不含免责声明)"""
     user_prompt = build_user_prompt(cal, almanac, iching, market)
 
-    print(f"正在调用 DeepSeek API ({config.deepseek_model}, t={config.llm_temperature}) 生成报告...")
-    body = call_deepseek(
-        api_key=config.deepseek_api_key,
-        base_url=config.deepseek_base_url,
-        model=config.deepseek_model,
-        system_prompt=SYSTEM_PROMPT,
+    enabled = list(market.sections.keys())
+    system_prompt = build_system_prompt(enabled)
+
+    provider = config.llm_provider
+    print(f"正在调用 LLM (provider={provider}, t={config.llm_temperature}) 生成报告...")
+    body = call_llm(
+        provider=provider,
+        api_key=config.llm_api_key,
+        base_url=config.llm_base_url,
+        model=config.llm_model,
+        claude_api_key=config.llm_claude_api_key,
+        claude_model=config.llm_claude_model,
+        system_prompt=system_prompt,
         user_prompt=user_prompt,
         temperature=config.llm_temperature,
     )

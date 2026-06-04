@@ -53,9 +53,14 @@ jobs:
 
       - name: Run daily report
         env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL || 'https://api.deepseek.com' }}
-          DEEPSEEK_MODEL: ${{ secrets.DEEPSEEK_MODEL || 'deepseek-chat' }}
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'deepseek' }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY || secrets.DEEPSEEK_API_KEY || '' }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL || secrets.DEEPSEEK_BASE_URL || 'https://api.deepseek.com' }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL || secrets.DEEPSEEK_MODEL || 'deepseek-chat' }}
+          LLM_CLAUDE_API_KEY: ${{ secrets.LLM_CLAUDE_API_KEY || '' }}
+          LLM_CLAUDE_MODEL: ${{ secrets.LLM_CLAUDE_MODEL || 'claude-sonnet-4-20250514' }}
+          LLM_TEMPERATURE: ${{ secrets.LLM_TEMPERATURE || '0.8' }}
+          ENABLED_MARKETS: ${{ secrets.ENABLED_MARKETS || 'a_share,us_stock,macro,crypto' }}
           EMAIL_HOST: ${{ secrets.EMAIL_HOST || 'smtp.qq.com' }}
           EMAIL_PORT: ${{ secrets.EMAIL_PORT || '465' }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
